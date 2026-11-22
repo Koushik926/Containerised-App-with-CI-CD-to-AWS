@@ -148,6 +148,136 @@ class TestListTasks:
         assert "User2 Task" in titles2
         assert "User1 Task" not in titles2
 
+    @pytest.mark.asyncio
+    async def test_list_tasks_filter_by_status(
+        self, client: AsyncClient, auth_headers: dict[str, str]
+    ) -> None:
+        await client.post(
+            "/api/v1/tasks",
+            json={"title": "Todo Task", "status": "todo"},
+            headers=auth_headers,
+        )
+        await client.post(
+            "/api/v1/tasks",
+            json={"title": "Done Task", "status": "done"},
+            headers=auth_headers,
+        )
+
+        response = await client.get(
+            "/api/v1/tasks", params={"status": "done"}, headers=auth_headers
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert all(t["status"] == "done" for t in data)
+        assert any(t["title"] == "Done Task" for t in data)
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_filter_by_priority(
+        self, client: AsyncClient, auth_headers: dict[str, str]
+    ) -> None:
+        await client.post(
+            "/api/v1/tasks",
+            json={"title": "High Priority", "priority": "high"},
+            headers=auth_headers,
+        )
+        await client.post(
+            "/api/v1/tasks",
+            json={"title": "Low Priority", "priority": "low"},
+            headers=auth_headers,
+        )
+
+        response = await client.get(
+            "/api/v1/tasks", params={"priority": "high"}, headers=auth_headers
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert all(t["priority"] == "high" for t in data)
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_sort_by_created_at(
+        self, client: AsyncClient, auth_headers: dict[str, str]
+    ) -> None:
+        await client.post("/api/v1/tasks", json={"title": "First"}, headers=auth_headers)
+        await client.post("/api/v1/tasks", json={"title": "Second"}, headers=auth_headers)
+
+        response_desc = await client.get(
+            "/api/v1/tasks",
+            params={"sort_by": "created_at", "sort_order": "desc"},
+            headers=auth_headers,
+        )
+        assert response_desc.status_code == 200
+        data_desc = response_desc.json()
+        if len(data_desc) >= 2:
+            assert data_desc[0]["created_at"] >= data_desc[1]["created_at"]
+
+        response_asc = await client.get(
+            "/api/v1/tasks",
+            params={"sort_by": "created_at", "sort_order": "asc"},
+            headers=auth_headers,
+        )
+        assert response_asc.status_code == 200
+        data_asc = response_asc.json()
+        if len(data_asc) >= 2:
+            assert data_asc[0]["created_at"] <= data_asc[1]["created_at"]
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_sort_by_due_date(
+        self, client: AsyncClient, auth_headers: dict[str, str]
+    ) -> None:
+        await client.post(
+            "/api/v1/tasks",
+            json={"title": "Later", "due_date": "2025-12-31T23:59:59Z"},
+            headers=auth_headers,
+        )
+        await client.post(
+            "/api/v1/tasks",
+            json={"title": "Sooner", "due_date": "2025-01-01T00:00:00Z"},
+            headers=auth_headers,
+        )
+        await client.post(
+            "/api/v1/tasks",
+            json={"title": "No Due Date"},
+            headers=auth_headers,
+        )
+
+        response = await client.get(
+            "/api/v1/tasks",
+            params={"sort_by": "due_date", "sort_order": "asc"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_combined_filters(
+        self, client: AsyncClient, auth_headers: dict[str, str]
+    ) -> None:
+        await client.post(
+            "/api/v1/tasks",
+            json={"title": "High Todo", "status": "todo", "priority": "high"},
+            headers=auth_headers,
+        )
+        await client.post(
+            "/api/v1/tasks",
+            json={"title": "High Done", "status": "done", "priority": "high"},
+            headers=auth_headers,
+        )
+        await client.post(
+            "/api/v1/tasks",
+            json={"title": "Low Todo", "status": "todo", "priority": "low"},
+            headers=auth_headers,
+        )
+
+        response = await client.get(
+            "/api/v1/tasks",
+            params={"status": "todo", "priority": "high"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        for task in data:
+            assert task["status"] == "todo"
+            assert task["priority"] == "high"
+
 
 class TestGetTask:
     @pytest.mark.asyncio
@@ -202,7 +332,7 @@ class TestUpdateTask:
         )
         task_id = create_response.json()["id"]
 
-        response = await client.put(
+        response = await client.patch(
             f"/api/v1/tasks/{task_id}",
             json={"title": "Updated", "status": "done"},
             headers=auth_headers,
@@ -223,7 +353,7 @@ class TestUpdateTask:
         )
         task_id = create_response.json()["id"]
 
-        response = await client.put(
+        response = await client.patch(
             f"/api/v1/tasks/{task_id}",
             json={"priority": "high"},
             headers=auth_headers,
@@ -238,7 +368,7 @@ class TestUpdateTask:
     async def test_update_task_not_found(
         self, client: AsyncClient, auth_headers: dict[str, str]
     ) -> None:
-        response = await client.put(
+        response = await client.patch(
             "/api/v1/tasks/99999",
             json={"title": "Updated"},
             headers=auth_headers,
@@ -257,7 +387,7 @@ class TestUpdateTask:
         )
         task_id = create_response.json()["id"]
 
-        response = await client.put(
+        response = await client.patch(
             f"/api/v1/tasks/{task_id}",
             json={"title": "Hacked"},
             headers=auth_headers_user2,
@@ -266,7 +396,7 @@ class TestUpdateTask:
 
     @pytest.mark.asyncio
     async def test_update_task_no_auth(self, client: AsyncClient) -> None:
-        response = await client.put("/api/v1/tasks/1", json={"title": "Updated"})
+        response = await client.patch("/api/v1/tasks/1", json={"title": "Updated"})
         assert response.status_code == 401
 
 

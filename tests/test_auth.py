@@ -1,7 +1,11 @@
 import uuid
+from typing import TYPE_CHECKING
 
 import pytest
 from httpx import AsyncClient
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def unique_email() -> str:
@@ -137,6 +141,21 @@ class TestLogin:
         data = response.json()
         assert "access_token" in data
 
+    @pytest.mark.asyncio
+    async def test_login_json_wrong_password(self, client: AsyncClient) -> None:
+        email = unique_email()
+        await client.post(
+            "/api/v1/auth/register",
+            json={"email": email, "password": "testpassword123", "full_name": "Test"},
+        )
+
+        response = await client.post(
+            "/api/v1/auth/login/json",
+            json={"email": email, "password": "wrongpassword"},
+        )
+        assert response.status_code == 401
+        assert response.json()["detail"] == "Incorrect email or password"
+
 
 class TestGetCurrentUser:
     @pytest.mark.asyncio
@@ -164,3 +183,61 @@ class TestGetCurrentUser:
             headers={"Authorization": "Bearer invalid-token"},
         )
         assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_get_me_expired_token(self, client: AsyncClient) -> None:
+        expired_token = (
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxMDAwMDAwMDAwfQ.invalid"
+        )
+        response = await client.get(
+            "/api/v1/users/me",
+            headers={"Authorization": f"Bearer {expired_token}"},
+        )
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_get_me_nonexistent_user_id(self, client: AsyncClient) -> None:
+        from app.core.security import create_access_token
+
+        token = create_access_token(subject="99999")
+        response = await client.get(
+            "/api/v1/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_get_me_non_integer_subject(self, client: AsyncClient) -> None:
+        from app.core.security import create_access_token
+
+        token = create_access_token(subject="not-an-integer")
+        response = await client.get(
+            "/api/v1/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_get_me_inactive_user(
+        self, client: AsyncClient, db_session: "AsyncSession"
+    ) -> None:
+        from app.core.security import create_access_token
+        from app.schemas.user import UserCreate
+        from app.services.user import create_user
+
+        user_in = UserCreate(
+            email="inactive-user@example.com",
+            password="testpassword123",
+            full_name="Inactive User",
+        )
+        user = await create_user(db_session, user_in)
+        user.is_active = False
+        await db_session.commit()
+
+        token = create_access_token(subject=str(user.id))
+        response = await client.get(
+            "/api/v1/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Inactive user"

@@ -1,6 +1,9 @@
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import CurrentUser, DbSession
+from app.models.task import TaskPriority, TaskStatus
 from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
 from app.services.task import (
     create_task,
@@ -10,17 +13,33 @@ from app.services.task import (
     update_task,
 )
 
-router = APIRouter(prefix="/tasks", tags=["tasks"])
+router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
 
-@router.get("", response_model=list[TaskResponse])
+@router.get("", response_model=list[TaskResponse], summary="List tasks")
 async def list_tasks(
     db: DbSession,
     current_user: CurrentUser,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=100),
+    skip: int = Query(0, ge=0, description="Number of tasks to skip"),
+    limit: int = Query(100, ge=1, le=100, description="Maximum tasks to return"),
+    status: TaskStatus | None = Query(None, description="Filter by status"),
+    priority: TaskPriority | None = Query(None, description="Filter by priority"),
+    sort_by: Literal["created_at", "due_date"] = Query(
+        "created_at", description="Field to sort by"
+    ),
+    sort_order: Literal["asc", "desc"] = Query("desc", description="Sort direction"),
 ) -> list[TaskResponse]:
-    tasks = await get_tasks_by_owner(db, current_user.id, skip=skip, limit=limit)
+    """List all tasks for the current user with optional filters and sorting."""
+    tasks = await get_tasks_by_owner(
+        db,
+        current_user.id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        priority=priority,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
     return [TaskResponse.model_validate(t) for t in tasks]
 
 
@@ -49,7 +68,7 @@ async def get_task(
     return TaskResponse.model_validate(task)
 
 
-@router.put("/{task_id}", response_model=TaskResponse)
+@router.patch("/{task_id}", response_model=TaskResponse, summary="Update a task")
 async def update_existing_task(
     db: DbSession,
     current_user: CurrentUser,

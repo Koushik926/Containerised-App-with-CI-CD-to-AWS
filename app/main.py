@@ -1,9 +1,12 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api.v1 import api_router
 from app.core.config import get_settings
@@ -11,6 +14,7 @@ from app.core.logging import RequestIdMiddleware, get_logger, setup_logging
 
 settings = get_settings()
 logger = get_logger(__name__)
+templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 
 @asynccontextmanager
@@ -51,6 +55,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+Instrumentator().instrument(app).expose(app, endpoint="/metrics", tags=["Monitoring"])
 
 app.include_router(api_router)
 
@@ -99,3 +105,19 @@ async def get_version() -> dict[str, Any]:
         "build_time": settings.build_time,
         "environment": settings.environment,
     }
+
+
+@app.get("/", response_class=HTMLResponse, tags=["Info"], include_in_schema=False)
+async def home(request: Request) -> HTMLResponse:
+    """Render the home page."""
+    return templates.TemplateResponse(
+        request,
+        "home.html",
+        {
+            "app_name": settings.app_name,
+            "version": settings.app_version,
+            "git_sha": settings.git_sha,
+            "build_time": settings.build_time,
+            "environment": settings.environment,
+        },
+    )
