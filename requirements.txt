@@ -1,0 +1,29 @@
+# Core Framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+gunicorn==23.0.0
+
+# Database
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+
+# Validation & Settings
+pydantic==2.10.2
+pydantic-settings==2.6.1
+email-validator==2.2.0
+
+# Authentication
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+python-jose[cryptography]==3.3.0
+
+# Observability
+prometheus-fastapi-instrumentator==7.0.0
+
+# Templating (for home page)
+jinja2==3.1.4
+
+# Utilities
+python-multipart==0.0.17
+httpx==0.28.1

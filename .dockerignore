@@ -1,0 +1,65 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+.venv
+venv
+.eggs
+*.egg-info
+*.egg
+.pytest_cache
+.coverage
+htmlcov
+coverage.xml
+.hypothesis
+.mypy_cache
+.ruff_cache
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Documentation and screenshots
+docs/screenshots
+*.md
+!requirements*.txt
+
+# Terraform
+infra
+
+# Tests (not needed in production image)
+tests
+pytest.ini
+conftest.py
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Local development
+.env*
+!.env.example
+Makefile
+
+# CI/CD
+.github
+
+# Scripts (copied separately in deploy)
+scripts
+
+# Misc
+tmp
+temp
+*.log
+*.pem
+*.key
