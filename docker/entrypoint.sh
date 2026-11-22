@@ -1,13 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "TaskFlow API - Container Starting"
-echo "=================================="
-echo "Version: ${APP_VERSION:-unknown}"
-echo "Git SHA: ${GIT_SHA:-unknown}"
-echo "Build Time: ${BUILD_TIME:-unknown}"
-echo ""
-
 # Wait for database to be ready
 wait_for_db() {
     local max_attempts=30
@@ -59,17 +52,33 @@ run_migrations() {
     fi
 }
 
-# Main startup sequence
-main() {
+# Check if this is a server startup command
+is_server_command() {
+    case "$1" in
+        gunicorn|uvicorn)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+# Main
+if [ $# -gt 0 ] && is_server_command "$1"; then
+    echo "TaskFlow API - Container Starting"
+    echo "=================================="
+    echo "Version: ${APP_VERSION:-unknown}"
+    echo "Git SHA: ${GIT_SHA:-unknown}"
+    echo "Build Time: ${BUILD_TIME:-unknown}"
+    echo ""
+
     wait_for_db
     run_migrations
 
     echo ""
     echo "Starting application..."
     echo "=================================="
+fi
 
-    # Execute the CMD
-    exec "$@"
-}
-
-main "$@"
+exec "$@"

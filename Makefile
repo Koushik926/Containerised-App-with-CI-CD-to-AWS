@@ -73,7 +73,7 @@ install: venv
 
 dev:
 	@echo "Starting development environment..."
-	docker compose up -d
+	GIT_SHA=$(GIT_SHA) BUILD_TIME=$(BUILD_TIME) APP_VERSION=$(APP_VERSION) docker compose up -d --build
 	@echo ""
 	@echo "Services starting..."
 	@echo "  API:  http://localhost:8000"
