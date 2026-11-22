@@ -161,13 +161,14 @@ build-multiarch:
 		--push \
 		.
 
-run-prod-local:
-	@echo "Starting production stack locally..."
-	IMAGE_TAG=$(IMAGE_TAG) docker compose -f docker-compose.prod.yml up -d
+run-prod-local: build
+	@echo "Starting production stack locally on port 8081..."
+	IMAGE_TAG=$(IMAGE_TAG) SECRET_KEY=local-dev-secret-key NGINX_PORT=8081 \
+		docker compose -f docker-compose.prod.yml up -d
 	@echo ""
 	@echo "Production stack running:"
-	@echo "  App: http://localhost:80"
-	@sleep 3
+	@echo "  App: http://localhost:8081"
+	@sleep 5
 	docker compose -f docker-compose.prod.yml ps
 
 stop-prod-local:
