@@ -1,0 +1,98 @@
+name: Manual Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to rollback to (e.g., sha-abc1234). Leave empty to use .previous_tag on server.'
+        required: false
+        type: string
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    name: Rollback to Previous Version
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: http://${{ secrets.EC2_HOST }}
+
+    steps:
+      - name: Check deployment secrets
+        id: check-secrets
+        run: |
+          if [ -z "${{ secrets.EC2_HOST }}" ] || [ -z "${{ secrets.EC2_USER }}" ] || [ -z "${{ secrets.EC2_SSH_KEY }}" ]; then
+            echo "## Rollback Failed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "EC2 secrets not configured. Cannot perform rollback." >> $GITHUB_STEP_SUMMARY
+            echo "Required secrets: EC2_HOST, EC2_USER, EC2_SSH_KEY" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          if [ -n "${{ secrets.EC2_KNOWN_HOSTS }}" ]; then
+            echo "${{ secrets.EC2_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          else
+            ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          fi
+
+      - name: Copy rollback script
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          scp -i ~/.ssh/deploy_key \
+            scripts/rollback.sh \
+            $EC2_USER@$EC2_HOST:/opt/taskflow/
+
+      - name: Execute rollback
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          ssh -i ~/.ssh/deploy_key $EC2_USER@$EC2_HOST \
+            "cd /opt/taskflow && chmod +x rollback.sh && ./rollback.sh ${IMAGE_TAG:-}"
+
+      - name: Verify rollback
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          echo "Waiting for rollback to stabilize..."
+          sleep 5
+
+          for i in {1..6}; do
+            if curl -sf "http://$EC2_HOST/health/ready" > /dev/null; then
+              echo "Health check passed!"
+              break
+            fi
+            echo "Attempt $i/6 - waiting..."
+            sleep 5
+          done
+
+          VERSION_INFO=$(curl -sf "http://$EC2_HOST/version" || echo '{}')
+          echo "Current version info:"
+          echo "$VERSION_INFO" | jq .
+
+          RUNNING_SHA=$(echo "$VERSION_INFO" | jq -r '.git_sha // "unknown"')
+
+          echo "## Rollback Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** http://$EC2_HOST" >> $GITHUB_STEP_SUMMARY
+          echo "**Running SHA:** \`$RUNNING_SHA\`" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ inputs.image_tag }}" ]; then
+            echo "**Target Tag:** \`${{ inputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Target:** Previous version (.previous_tag)" >> $GITHUB_STEP_SUMMARY
+          fi
