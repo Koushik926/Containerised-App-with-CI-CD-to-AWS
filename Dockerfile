@@ -1,7 +1,7 @@
 # =============================================================================
 # Stage 1: Builder - Install dependencies
 # =============================================================================
-FROM python:3.12-slim AS builder
+FROM python:3.15-slim AS builder
 
 WORKDIR /build
 
@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir pip==24.3.1 && \
 # =============================================================================
 # Stage 2: Runtime - Final slim image
 # =============================================================================
-FROM python:3.12-slim AS runtime
+FROM python:3.15-slim AS runtime
 
 # Build arguments for version info
 ARG GIT_SHA=unknown
