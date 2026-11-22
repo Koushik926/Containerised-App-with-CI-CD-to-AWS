@@ -1,0 +1,23 @@
+# Copy this file to terraform.tfvars and fill in the values
+# DO NOT commit terraform.tfvars to version control
+
+aws_region    = "us-east-1"
+instance_type = "t4g.micro"
+
+# Name of an existing EC2 key pair in your AWS account
+key_pair_name = "my-key-pair"
+
+# Your IP address for SSH access (get it from https://checkip.amazonaws.com/)
+my_ip_cidr = "1.2.3.4/32"
+
+# GitHub organization or username
+github_org = "Koushik926"
+
+# GitHub repository name
+github_repo = "Containerised-App-with-CI-CD-to-AWS"
+
+# Optional: Enable CloudWatch CPU alarm
+enable_cloudwatch_alarm = false
+
+# Optional: Email for alarm notifications (required if enable_cloudwatch_alarm is true)
+# alarm_email = "your-email@example.com"
